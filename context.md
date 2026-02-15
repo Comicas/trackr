@@ -1,81 +1,137 @@
-# MediaVault / Trackr - Context
+# MediaVault / Trackr — Context
 
-## Goal
-Local-first tracker for Games, Anime, Movies, Series.
-User manages personal lists with statuses, search/add from APIs, offline-friendly.
+## One-liner
+Local-first tracker for Games, Anime, Movies, and Series with searchable catalogs (TMDB, AniList, IGDB) and persistent personal lists stored offline.
 
-## Stack
-- Next.js (App Router), TypeScript, Tailwind.
-- UI already exists (dashboard-style homepage).
+## Product Goals
+- Search external catalogs and add items to personal lists.
+- Manage per-item status (plan/watching/completed/dropped, etc.).
+- Work offline-first with local persistence and backup/restore.
 
 ## Non-goals (for now)
-- No online deployment, no auth, no remote database.
-- No multi-user support.
-- API integration should be read-only, just search + details.
+- No online deployment requirements.
+- No authentication or multi-user support.
+- No remote database or server-side user storage.
+- Read-only usage of external APIs (search/details only).
 
-## Domains
+## Tech Stack
+- Next.js (App Router)
+- React + TypeScript
+- Tailwind CSS
+- IndexedDB persistence (via `idb`)
+
+## Core Domains
 ### MediaType
-- "movie" | "series" | "anime" | "game"
+- `movie` | `series` | `anime` | `game`
 
-### Status
-- For anime/movies/series: "plan" | "watching" | "completed" | "dropped"
-- For games: "backlog" | "playing" | "completed"
+### Status by type
+- movie/series/anime: `plan` | `watching` | `completed` | `dropped`
+- game: `backlog` | `playing` | `completed`
 
-### Core entities
-#### MediaItem (normalized)
-- id: string (local uuid)
-- type: MediaType
-- source: "tmdb" | "anilist" | "igdb"
-- sourceId: string (external id)
-- title: string
-- year?: number
-- coverUrl?: string
-- rating?: number
-- meta?: object (source-specific fields)
+## Data Model (Normalized)
+### MediaItem
+Represents the static metadata about a title (from an external source).
+- `id: string` (local uuid)
+- `type: MediaType`
+- `source: "tmdb" | "anilist" | "igdb"`
+- `sourceId: string` (external id)
+- `title: string`
+- `year?: number`
+- `coverUrl?: string`
+- `rating?: number` (source rating normalized when possible)
+- `meta?: Record<string, any>` (source-specific payload for future detail pages)
 
-#### ListEntry
-- mediaId: string
-- status: string (by media type)
-- progress?: number (episodes watched / hours / etc.)
-- notes?: string
-- updatedAt: number (epoch ms)
-- createdAt: number
+### ListEntry
+Represents the user’s relationship to a MediaItem.
+- `mediaId: string`
+- `status: string` (valid values depend on MediaType)
+- `progress?: number` (optional; will be expanded later)
+- `notes?: string`
+- `createdAt: number` (epoch ms)
+- `updatedAt: number` (epoch ms)
 
-## Storage (local-first)
-- IndexedDB stores:
-  - mediaItems
-  - listEntries
-  - settings
-- localStorage only for tiny UI prefs (theme, last selected tab).
-- Provide Export/Import JSON for backup.
+## Persistence (Local-first)
+- IndexedDB database: `trackr-db`
+- Object stores:
+  - `mediaItems`
+  - `listEntries`
+  - `settings`
+- localStorage is only for tiny UI preferences (e.g., theme, last tab), not core data.
+- Backup/restore:
+  - Export JSON dump of all stores
+  - Import JSON dump (validate version; merge safely by ids)
 
-## API access rules
-- TMDB + IGDB keys/secrets must not be exposed to the browser:
-  - Use Next.js route handlers under /app/api/* as a proxy.
-- AniList can be called directly (public queries) but we can still proxy for consistency.
+## Current Features (Implemented)
+### UX
+- Dashboard shows 4 sections: Movies, Series, Anime, Games.
+- Section titles are clickable links to full list pages.
+- Each section has its own small "+" button (scoped add flow).
+- Adding flow:
+  - Opens SearchModal scoped to that media type
+  - User selects an item from results
+  - User chooses status BEFORE saving
+  - Saves MediaItem + ListEntry to IndexedDB
 
-## Folder plan
-- /lib/types.ts              (enums + interfaces)
-- /lib/storage/db.ts         (indexeddb init + schema)
-- /lib/storage/repo.ts       (CRUD functions)
-- /lib/apis/tmdb.ts          (client wrappers)
-- /lib/apis/anilist.ts       (graphql queries)
-- /lib/apis/igdb.ts          (client wrappers)
-- /app/api/tmdb/*            (proxy routes)
-- /app/api/igdb/*            (proxy routes)
-- /components/search-modal   (UI)
-- /components/boards         (status columns)
+### Pages
+- `/` dashboard
+- `/movies` grouped by status
+- `/series` grouped by status
+- `/anime` grouped by status
+- `/games` grouped by status
+- `/storage-demo` to validate persistence + export/import
 
-## Implementation plan (next milestone)
-Milestone A: Real search + add flow
-- UI: Global Add button + SearchModal with tabs (Movies, Series, Anime, Games)
-- Result card: title, year, cover, source badge
-- On select: upsert MediaItem + create/update ListEntry with default status
+## External APIs (Implemented)
+### TMDB (Movies + Series)
+- Route handlers (proxy):
+  - `/app/api/tmdb/search`
+  - `/app/api/tmdb/details`
+- Client wrapper:
+  - `lib/apis/tmdb.ts`
+- Notes:
+  - Images require Next image remote config for `image.tmdb.org`.
 
-Milestone B: API proxies
-- /app/api/tmdb/search, /app/api/tmdb/details
-  - Uses Authorization: Bearer TMDB_READ_TOKEN
-- /app/api/anilist/search (optional but preferred)
-  - POST https://graphql.anilist.co with query+variables
-- /app/api/igdb/token + /app/api/igdb/search
-  - Server-only OAuth client-credentials flow, cache token
+### AniList (Anime)
+- Search via GraphQL.
+- Proxy route handler:
+  - `/app/api/anilist/search`
+- Client wrapper:
+  - `lib/apis/anilist.ts`
+- No API key required for public search queries.
+
+### IGDB (Games) via Twitch OAuth
+- Route handlers (server-only):
+  - `/app/api/igdb/token` (client-credentials, token cached in-memory)
+  - `/app/api/igdb/search`
+- Client wrapper:
+  - `lib/apis/igdb.ts`
+- Must never expose Twitch client secret to the browser.
+
+## Secrets / Env Vars
+Required in `.env.local` (server-only):
+- `TMDB_READ_TOKEN=...`
+- `TWITCH_CLIENT_ID=...`
+- `TWITCH_CLIENT_SECRET=...`
+
+## Key Files / Structure
+- Types:
+  - `lib/types.ts`
+- Storage:
+  - `lib/storage/db.ts`
+  - `lib/storage/repo.ts`
+  - `lib/storage/backup.ts`
+- API clients:
+  - `lib/apis/tmdb.ts`
+  - `lib/apis/anilist.ts`
+  - `lib/apis/igdb.ts`
+- UI:
+  - `components/search-modal.tsx`
+  - `components/cover-card.tsx`
+  - `components/bento-section.tsx`
+- Routes:
+  - `app/api/**/route.ts`
+  - `app/*/page.tsx`
+
+## Constraints / Rules
+- Never commit real secrets; `.env.local` must be gitignored.
+- No client-side access to server secrets; all secret-requiring calls go through route handlers.
+- Keep `MediaItem` normalized and store source-specific fields only in `meta`.

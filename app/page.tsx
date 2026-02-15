@@ -51,7 +51,7 @@ const profile = {
   name: "Alex Chen",
   bio: "Avid media enthusiast. Always watching, playing, or discovering something new.",
   image: "/images/profile.jpg",
-  stats: { anime: 142, games: 87, movies: 253, series: 96 },
+  stats: { anime: 0, games: 0, movies: 0, series: 0 },
 }
 
 export default function Home() {
