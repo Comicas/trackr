@@ -12,52 +12,50 @@ import { StatsBar } from "@/components/stats-bar"
 import { Button } from "@/components/ui/button"
 import { SearchModal } from "@/components/search-modal"
 import { MediaType } from "@/lib/types"
-
-const games = [
-  { title: "Elden Ring", image: "/images/games/elden-ring.jpg" },
-  { title: "Hollow Knight", image: "/images/games/hollow-knight.jpg" },
-  { title: "Persona 5 Royal", image: "/images/games/persona5.jpg" },
-]
-
-const anime = [
-  { title: "Sousou no Frieren", image: "/images/anime/frieren.jpg" },
-  { title: "Jujutsu Kaisen", image: "/images/anime/jjk.jpg" },
-  { title: "Vinland Saga", image: "/images/anime/vinland.jpg" },
-  { title: "Spy x Family", image: "/images/anime/spy-family.jpg" },
-]
-
-const thisSeason = [
-  { title: "Solo Leveling", image: "/images/anime/solo-leveling.jpg" },
-  { title: "Dandadan", image: "/images/anime/dandadan.jpg" },
-  { title: "Sakamoto Days", image: "/images/anime/sakamoto-days.jpg" },
-  { title: "Dr. Stone", image: "/images/anime/dr-stone.jpg" },
-]
-
-const movies = [
-  { title: "Interstellar", image: "/images/movies/interstellar.jpg" },
-  { title: "Spirited Away", image: "/images/movies/spirited-away.jpg" },
-  { title: "Blade Runner 2049", image: "/images/movies/blade-runner.jpg" },
-  { title: "Your Name", image: "/images/movies/your-name.jpg" },
-]
-
-const series = [
-  { title: "Breaking Bad", image: "/images/series/breaking-bad.jpg" },
-  { title: "Dark", image: "/images/series/dark.jpg" },
-  { title: "Arcane", image: "/images/series/arcane.jpg" },
-  { title: "Severance", image: "/images/series/severance.jpg" },
-]
-
-const profile = {
-  name: "Alex Chen",
-  bio: "Avid media enthusiast. Always watching, playing, or discovering something new.",
-  image: "/images/profile.jpg",
-  stats: { anime: 0, games: 0, movies: 0, series: 0 },
-}
+import { useCompletedCounts } from "@/hooks/use-completed-counts"
+import { repo } from "@/lib/storage/repo"
 
 export default function Home() {
   const [searchOpen, setSearchOpen] = React.useState(false);
   const [searchType, setSearchType] = React.useState<MediaType>('movie');
   const [allowedTypes, setAllowedTypes] = React.useState<MediaType[]>(['movie']);
+
+  // Dynamic data from IndexedDB
+  const [moviesData, setMoviesData] = React.useState<Array<{ media: any; entry: any }>>([]);
+  const [seriesData, setSeriesData] = React.useState<Array<{ media: any; entry: any }>>([]);
+  const [gamesData, setGamesData] = React.useState<Array<{ media: any; entry: any }>>([]);
+  const [animeData, setAnimeData] = React.useState<{
+    thisSeason: Array<{ media: any; entry: any }>;
+    main: Array<{ media: any; entry: any }>;
+  }>({ thisSeason: [], main: [] });
+
+  const completedCounts = useCompletedCounts();
+
+  // Load data on mount and when repo changes
+  const loadData = React.useCallback(async () => {
+    const [movies, series, games, anime] = await Promise.all([
+      repo.getHomeSection('movie', 4, ['watching'], ['completed']),
+      repo.getHomeSection('series', 4, ['watching'], ['completed']),
+      repo.getHomeSection('game', 3, ['playing'], ['completed']),
+      repo.getHomeAnimeSections(),
+    ]);
+
+    setMoviesData(movies);
+    setSeriesData(series);
+    setGamesData(games);
+    setAnimeData(anime);
+  }, []);
+
+  React.useEffect(() => {
+    loadData();
+  }, [loadData]);
+
+  React.useEffect(() => {
+    const unsubscribe = repo.subscribe(() => {
+      loadData();
+    });
+    return unsubscribe;
+  }, [loadData]);
 
   const openSearch = (type: MediaType, allowed: MediaType[] = [type]) => {
     setSearchType(type);
@@ -102,8 +100,15 @@ export default function Home() {
               </div>
             } accentColor="bg-peach" className="h-full">
               <div className="grid grid-cols-2 gap-2">
-                {movies.map((movie) => (
-                  <CoverCard key={movie.title} {...movie} />
+                {moviesData.map((item) => (
+                  <CoverCard
+                    key={item.media.id}
+                    title={item.media.title}
+                    image={item.media.coverUrl || ''}
+                    year={item.media.year}
+                    rating={item.media.rating}
+                    status={item.entry.status}
+                  />
                 ))}
               </div>
             </BentoSection>
@@ -121,23 +126,37 @@ export default function Home() {
             } accentColor="bg-lavender" className="h-full">
               <div className="flex h-full flex-col gap-2">
                 <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                  {anime.map((item) => (
-                    <CoverCard key={item.title} {...item} />
+                  {animeData.main.map((item) => (
+                    <CoverCard
+                      key={item.media.id}
+                      title={item.media.title}
+                      image={item.media.coverUrl || ''}
+                      year={item.media.year}
+                      rating={item.media.rating}
+                      status={item.entry.status}
+                    />
                   ))}
                 </div>
-                <div className="border-t border-border pt-1">
-                  <div className="mb-1 flex items-center justify-center gap-1">
-                    <div className="h-1 w-1 rounded-full bg-sky" />
-                    <span className="text-[8px] font-semibold uppercase tracking-widest text-muted-foreground">
-                      This Season
-                    </span>
+                {animeData.thisSeason.length > 0 && (
+                  <div className="mt-auto border-t border-border pt-1.5 px-0.5">
+                    <div className="mb-2 flex items-center gap-1.5">
+                      <div className="h-1.5 w-1.5 rounded-full bg-sky-500 shadow-[0_0_6px_rgba(14,165,233,0.5)]" />
+                      <span className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground/80">
+                        This Season
+                      </span>
+                    </div>
+                    <div className="flex gap-2.5 overflow-x-auto pb-1.5 pl-0.5 scrollbar-thin scrollbar-thumb-foreground/10 scrollbar-track-transparent">
+                      {animeData.thisSeason.map((item) => (
+                        <MiniCoverCard
+                          key={item.media.id}
+                          title={item.media.title}
+                          image={item.media.coverUrl || ''}
+                          status={item.entry.status}
+                        />
+                      ))}
+                    </div>
                   </div>
-                  <div className="mx-auto grid w-5/6 grid-cols-4 gap-3">
-                    {thisSeason.map((item) => (
-                      <MiniCoverCard key={item.title} {...item} />
-                    ))}
-                  </div>
-                </div>
+                )}
               </div>
             </BentoSection>
           </div>
@@ -153,8 +172,13 @@ export default function Home() {
               </div>
             } accentColor="bg-pink" className="h-full">
               <div className="flex h-full flex-col gap-2">
-                {games.map((game) => (
-                  <GameBanner key={game.title} {...game} />
+                {gamesData.map((item) => (
+                  <GameBanner
+                    key={item.media.id}
+                    title={item.media.title}
+                    image={item.media.coverUrl || ''}
+                    status={item.entry.status}
+                  />
                 ))}
               </div>
             </BentoSection>
@@ -162,12 +186,17 @@ export default function Home() {
 
           {/* ... ROW 2 ... */}
           <div className="md:col-span-1 lg:col-span-3 lg:col-start-1 lg:row-start-2">
-            <ProfileCard {...profile} />
+            <ProfileCard
+              name="Comicas"
+              bio="blablabla fuc fuc fuc"
+              image="/images/profile.jpg"
+              stats={{ anime: 0, games: 0, movies: 0, series: 0 }}
+            />
           </div>
 
           <div className="md:col-span-1 lg:col-span-6 lg:col-start-4 lg:row-start-2">
             <div className="flex h-full flex-col gap-2.5">
-              <StatsBar stats={profile.stats} />
+              <StatsBar stats={completedCounts} />
               <BentoSection title={
                 <div className="flex items-center gap-2">
                   <Link href="/series" className="hover:underline">Series</Link>
@@ -177,8 +206,15 @@ export default function Home() {
                 </div>
               } accentColor="bg-cream" className="flex-1">
                 <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                  {series.map((item) => (
-                    <CoverCard key={item.title} {...item} />
+                  {seriesData.map((item) => (
+                    <CoverCard
+                      key={item.media.id}
+                      title={item.media.title}
+                      image={item.media.coverUrl || ''}
+                      year={item.media.year}
+                      rating={item.media.rating}
+                      status={item.entry.status}
+                    />
                   ))}
                 </div>
               </BentoSection>

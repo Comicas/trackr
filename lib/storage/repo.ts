@@ -1,10 +1,28 @@
 import { getDB } from './db';
 import { MediaItem, ListEntry, MediaStatus, MediaType, MediaItemWithEntry } from '@/lib/types';
 
+type ChangeListener = () => void;
+const listeners: ChangeListener[] = [];
+
+function notifyListeners() {
+    listeners.forEach(l => l());
+}
+
 export const repo = {
+    subscribe(listener: ChangeListener) {
+        listeners.push(listener);
+        return () => {
+            const index = listeners.indexOf(listener);
+            if (index > -1) {
+                listeners.splice(index, 1);
+            }
+        };
+    },
+
     async upsertMediaItem(item: MediaItem) {
         const db = await getDB();
         await db.put('mediaItems', item);
+        notifyListeners();
     },
 
     async setEntryStatus(mediaId: string, status: MediaStatus) {
@@ -21,6 +39,7 @@ export const repo = {
         };
 
         await db.put('listEntries', entry);
+        notifyListeners();
     },
 
     async updateEntry(mediaId: string, patch: Partial<ListEntry>) {
@@ -38,11 +57,13 @@ export const repo = {
         };
 
         await db.put('listEntries', updatedEntry);
+        notifyListeners();
     },
 
     async removeEntry(mediaId: string) {
         const db = await getDB();
         await db.delete('listEntries', mediaId);
+        notifyListeners();
     },
 
     async getMediaItem(id: string): Promise<MediaItem | undefined> {
@@ -120,5 +141,133 @@ export const repo = {
         }
 
         return counts;
+    },
+
+    async getCompletedCounts() {
+        const db = await getDB();
+        const entries = await db.getAll('listEntries');
+
+        const counts = {
+            anime: 0,
+            games: 0,
+            movies: 0,
+            series: 0
+        };
+
+        for (const entry of entries) {
+            if (entry.status === 'completed') {
+                const item = await db.get('mediaItems', entry.mediaId);
+                if (item) {
+                    if (item.type === 'anime') counts.anime++;
+                    else if (item.type === 'game') counts.games++;
+                    else if (item.type === 'movie') counts.movies++;
+                    else if (item.type === 'series') counts.series++;
+                }
+            }
+        }
+
+        return counts;
+    },
+
+    async getHomeSection(
+        type: MediaType,
+        limit: number,
+        primaryStatuses: MediaStatus[],
+        fallbackStatuses: MediaStatus[]
+    ): Promise<Array<{ media: MediaItem; entry: ListEntry }>> {
+        const db = await getDB();
+        const mediaItems = await db.getAllFromIndex('mediaItems', 'by-type', type);
+
+        // Collect entries with media
+        const itemsWithEntries: Array<{ media: MediaItem; entry: ListEntry }> = [];
+
+        for (const media of mediaItems) {
+            const entry = await db.get('listEntries', media.id);
+            if (entry) {
+                itemsWithEntries.push({ media, entry });
+            }
+        }
+
+        // Separate by primary and fallback statuses
+        const primaryItems = itemsWithEntries
+            .filter(item => primaryStatuses.includes(item.entry.status))
+            .sort((a, b) => b.entry.updatedAt - a.entry.updatedAt);
+
+        const fallbackItems = itemsWithEntries
+            .filter(item => fallbackStatuses.includes(item.entry.status))
+            .sort((a, b) => b.entry.updatedAt - a.entry.updatedAt);
+
+        // Combine: primary first, then fallback, capped at limit
+        const result = [...primaryItems];
+        const remaining = limit - result.length;
+
+        if (remaining > 0) {
+            result.push(...fallbackItems.slice(0, remaining));
+        }
+
+        return result.slice(0, limit);
+    },
+
+    async getHomeAnimeSections(): Promise<{
+        thisSeason: Array<{ media: MediaItem; entry: ListEntry }>;
+        main: Array<{ media: MediaItem; entry: ListEntry }>;
+    }> {
+        const db = await getDB();
+        const animeItems = await db.getAllFromIndex('mediaItems', 'by-type', 'anime');
+
+        // Calculate current season
+        const now = new Date();
+        const currentYear = now.getFullYear();
+        const month = now.getMonth() + 1; // 1-12
+        let currentSeason: string;
+
+        if (month >= 1 && month <= 3) {
+            currentSeason = 'WINTER';
+        } else if (month >= 4 && month <= 6) {
+            currentSeason = 'SPRING';
+        } else if (month >= 7 && month <= 9) {
+            currentSeason = 'SUMMER';
+        } else {
+            currentSeason = 'FALL';
+        }
+
+        // Collect all anime with entries
+        const itemsWithEntries: Array<{ media: MediaItem; entry: ListEntry }> = [];
+
+        for (const media of animeItems) {
+            const entry = await db.get('listEntries', media.id);
+            if (entry) {
+                itemsWithEntries.push({ media, entry });
+            }
+        }
+
+        // Filter "This Season": watching + RELEASING + current season/year
+        const thisSeason = itemsWithEntries
+            .filter(item => {
+                const { entry, media } = item;
+                return (
+                    entry.status === 'watching' &&
+                    media.meta?.status === 'RELEASING' &&
+                    media.meta?.seasonYear === currentYear &&
+                    media.meta?.season === currentSeason
+                );
+            })
+            .sort((a, b) => b.entry.updatedAt - a.entry.updatedAt);
+
+        // Get IDs of "This Season" items to exclude from main
+        const thisSeasonIds = new Set(thisSeason.map(item => item.media.id));
+
+        // Main anime: watching (not in thisSeason) first, then completed
+        const watching = itemsWithEntries
+            .filter(item => item.entry.status === 'watching' && !thisSeasonIds.has(item.media.id))
+            .sort((a, b) => b.entry.updatedAt - a.entry.updatedAt);
+
+        const completed = itemsWithEntries
+            .filter(item => item.entry.status === 'completed')
+            .sort((a, b) => b.entry.updatedAt - a.entry.updatedAt);
+
+        const main = [...watching, ...completed].slice(0, 4);
+
+        return { thisSeason, main };
     }
 };

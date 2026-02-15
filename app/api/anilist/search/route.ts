@@ -15,6 +15,7 @@ query ($search: String, $page: Int, $perPage: Int) {
       coverImage {
         large
       }
+      season
       seasonYear
       averageScore
       episodes
@@ -75,9 +76,11 @@ export async function POST(request: NextRequest) {
             coverUrl: item.coverImage.large,
             rating: item.averageScore ? item.averageScore / 10 : undefined, // Scale to 0-10
             meta: {
+                season: item.season,
+                seasonYear: item.seasonYear,
+                status: item.status,
                 episodes: item.episodes,
                 format: item.format,
-                status: item.status,
                 description: item.description, // HTML description
             }
         }));

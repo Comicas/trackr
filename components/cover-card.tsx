@@ -1,4 +1,6 @@
 import Image from "next/image"
+import { MediaStatus } from "@/lib/types"
+import { StatusDot } from "@/components/status-dot"
 
 interface CoverCardProps {
   title: string
@@ -6,9 +8,10 @@ interface CoverCardProps {
   year?: number | string
   rating?: number
   compact?: boolean
+  status?: MediaStatus
 }
 
-export function CoverCard({ title, image, year, rating, compact }: CoverCardProps) {
+export function CoverCard({ title, image, year, rating, compact, status }: CoverCardProps) {
   return (
     <div className="group flex flex-col gap-1.5">
       <div className={`relative w-full overflow-hidden rounded-lg bg-muted ${compact ? 'aspect-[3/4]' : 'aspect-[2/3]'}`}>
@@ -26,6 +29,7 @@ export function CoverCard({ title, image, year, rating, compact }: CoverCardProp
           </div>
         )}
         <div className="absolute inset-0 rounded-lg ring-1 ring-inset ring-foreground/10" />
+        {status && <StatusDot status={status} />}
         {rating && (
           <div className="absolute top-1 right-1 bg-black/60 text-white text-[10px] px-1.5 py-0.5 rounded font-bold backdrop-blur-sm">
             {rating.toFixed(1)}
