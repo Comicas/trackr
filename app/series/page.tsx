@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, Plus } from 'lucide-react';
 import { repo } from '@/lib/storage/repo';
-import { MediaItemWithEntry } from '@/lib/types';
+import { MediaItemWithEntry, MediaStatus } from '@/lib/types';
 import { CoverCard } from '@/components/cover-card';
 import { Button } from '@/components/ui/button';
 import { SearchModal } from '@/components/search-modal';
@@ -18,6 +18,26 @@ export default function SeriesPage() {
         const all = await repo.listEntriesByTypeAndStatus('series');
         setItems(all);
         setLoading(false);
+    };
+
+    const handleRate = async (mediaId: string, rating: number) => {
+        await repo.updateEntry(mediaId, { userRating: rating });
+        load();
+    };
+
+    const handleClearRating = async (mediaId: string) => {
+        await repo.updateEntry(mediaId, { userRating: undefined });
+        load();
+    };
+
+    const handleStatusChange = async (mediaId: string, status: MediaStatus) => {
+        await repo.setEntryStatus(mediaId, status);
+        load();
+    };
+
+    const handleDelete = async (mediaId: string) => {
+        await repo.removeEntry(mediaId);
+        load();
     };
 
     useEffect(() => {
@@ -78,6 +98,13 @@ export default function SeriesPage() {
                                             image={item.coverUrl || ''}
                                             year={item.year}
                                             rating={item.rating}
+                                            status={item.entry?.status}
+                                            userRating={item.entry?.userRating}
+                                            type="series"
+                                            onRate={(r) => handleRate(item.id, r)}
+                                            onClearRating={() => handleClearRating(item.id)}
+                                            onStatusChange={(s) => handleStatusChange(item.id, s)}
+                                            onDelete={() => handleDelete(item.id)}
                                         />
                                     ))}
                                 </div>

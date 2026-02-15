@@ -11,7 +11,7 @@ import { ProfileCard } from "@/components/profile-card"
 import { StatsBar } from "@/components/stats-bar"
 import { Button } from "@/components/ui/button"
 import { SearchModal } from "@/components/search-modal"
-import { MediaType } from "@/lib/types"
+import { MediaType, MediaStatus } from "@/lib/types"
 import { useCompletedCounts } from "@/hooks/use-completed-counts"
 import { repo } from "@/lib/storage/repo"
 
@@ -63,6 +63,22 @@ export default function Home() {
     setSearchOpen(true);
   };
 
+  const handleRate = async (mediaId: string, rating: number) => {
+    await repo.updateEntry(mediaId, { userRating: rating });
+  };
+
+  const handleClearRating = async (mediaId: string) => {
+    await repo.updateEntry(mediaId, { userRating: undefined });
+  };
+
+  const handleStatusChange = async (mediaId: string, status: MediaStatus) => {
+    await repo.setEntryStatus(mediaId, status);
+  };
+
+  const handleDelete = async (mediaId: string) => {
+    await repo.removeEntry(mediaId);
+  };
+
   return (
     <main className="min-h-screen bg-background">
       {/* Search Modal */}
@@ -108,6 +124,12 @@ export default function Home() {
                     year={item.media.year}
                     rating={item.media.rating}
                     status={item.entry.status}
+                    userRating={item.entry.userRating}
+                    type={item.media.type}
+                    onRate={(r) => handleRate(item.media.id, r)}
+                    onClearRating={() => handleClearRating(item.media.id)}
+                    onStatusChange={(s) => handleStatusChange(item.media.id, s)}
+                    onDelete={() => handleDelete(item.media.id)}
                   />
                 ))}
               </div>
@@ -134,6 +156,12 @@ export default function Home() {
                       year={item.media.year}
                       rating={item.media.rating}
                       status={item.entry.status}
+                      userRating={item.entry.userRating}
+                      type={item.media.type}
+                      onRate={(r) => handleRate(item.media.id, r)}
+                      onClearRating={() => handleClearRating(item.media.id)}
+                      onStatusChange={(s) => handleStatusChange(item.media.id, s)}
+                      onDelete={() => handleDelete(item.media.id)}
                     />
                   ))}
                 </div>
@@ -152,6 +180,12 @@ export default function Home() {
                           title={item.media.title}
                           image={item.media.coverUrl || ''}
                           status={item.entry.status}
+                          userRating={item.entry.userRating}
+                          type={item.media.type}
+                          onRate={(r) => handleRate(item.media.id, r)}
+                          onClearRating={() => handleClearRating(item.media.id)}
+                          onStatusChange={(s) => handleStatusChange(item.media.id, s)}
+                          onDelete={() => handleDelete(item.media.id)}
                         />
                       ))}
                     </div>
@@ -178,6 +212,12 @@ export default function Home() {
                     title={item.media.title}
                     image={item.media.coverUrl || ''}
                     status={item.entry.status}
+                    userRating={item.entry.userRating}
+                    type={item.media.type}
+                    onRate={(r) => handleRate(item.media.id, r)}
+                    onClearRating={() => handleClearRating(item.media.id)}
+                    onStatusChange={(s) => handleStatusChange(item.media.id, s)}
+                    onDelete={() => handleDelete(item.media.id)}
                   />
                 ))}
               </div>
@@ -214,6 +254,12 @@ export default function Home() {
                       year={item.media.year}
                       rating={item.media.rating}
                       status={item.entry.status}
+                      userRating={item.entry.userRating}
+                      type={item.media.type}
+                      onRate={(r) => handleRate(item.media.id, r)}
+                      onClearRating={() => handleClearRating(item.media.id)}
+                      onStatusChange={(s) => handleStatusChange(item.media.id, s)}
+                      onDelete={() => handleDelete(item.media.id)}
                     />
                   ))}
                 </div>

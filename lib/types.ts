@@ -23,6 +23,7 @@ export interface MediaItem {
 export interface ListEntry {
     mediaId: string;
     status: MediaStatus;
+    userRating?: number; // 0-10
     progress?: number; // episode count, hours played, etc.
     notes?: string;
     createdAt: number; // timestamp
